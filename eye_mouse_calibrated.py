@@ -39,7 +39,7 @@ def main(
     hold_on_blink=True,         # göz kapalıyken imleci tut
     hold_extra_ms=0.12,         # açıldıktan sonra şu kadar s daha tut
     deadzone_px=4,              # küçük titreşimleri yok say
-    max_step_px=40,             # bir karede max adım
+    max_step_px=35,             # bir karede max adım
     # hız/yaklaşma
     sens_gain=1.6,              # 👈 Hız kazancı (dx,dy çarpanı)
     far_dist=120,               # 👈 Uzak hedef eşiği (px)

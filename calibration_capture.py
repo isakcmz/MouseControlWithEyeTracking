@@ -9,18 +9,18 @@ mp_face = mp.solutions.face_mesh
 def get_pts(lmk, w, h, idxs):
     return np.array([[lmk[i].x*w, lmk[i].y*h] for i in idxs], dtype=np.float32)
 
-# Kalibrasyon noktaları (ekran koordinatları)
+# --- 3x3 Kalibrasyon hedefleri ---
 def get_targets(sw, sh):
-    return [
-        (int(sw*0.1), int(sh*0.1)),   # sol-üst
-        (int(sw*0.9), int(sh*0.1)),   # sağ-üst
-        (int(sw*0.1), int(sh*0.9)),   # sol-alt
-        (int(sw*0.9), int(sh*0.9)),   # sağ-alt
-        (int(sw*0.5), int(sh*0.5))    # orta
-    ]
+    xs = [0.15, 0.5, 0.85]
+    ys = [0.15, 0.5, 0.85]
+    targets = []
+    for y in ys:
+        for x in xs:
+            targets.append((int(sw * x), int(sh * y)))
+    return targets
 
-def main(samples_per_point=30, delay=2.0):
-    sw, sh = 1920, 1080  # varsayılan ekran çözünürlüğü (pyautogui.size() ile de alınabilir)
+def main(samples_per_point=40, delay=2.0):
+    sw, sh = 1920, 1080  # ekran çözünürlüğü
 
     save_path = "../data/raw/calibration.csv"
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -30,6 +30,15 @@ def main(samples_per_point=30, delay=2.0):
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
     data = []
+
+    # --- Fullscreen pencere ---
+    cv2.namedWindow("Calibration", cv2.WINDOW_NORMAL)
+    cv2.setWindowProperty(
+        "Calibration",
+        cv2.WND_PROP_FULLSCREEN,
+        cv2.WINDOW_FULLSCREEN
+    )
+
     with mp_face.FaceMesh(max_num_faces=1, refine_landmarks=True) as fm:
         for tx, ty in get_targets(sw, sh):
             print(f"👉 Bu noktaya bak: ({tx}, {ty})")
@@ -38,7 +47,9 @@ def main(samples_per_point=30, delay=2.0):
             count = 0
             while count < samples_per_point:
                 ok, frame = cap.read()
-                if not ok: break
+                if not ok:
+                    break
+
                 frame = cv2.flip(frame, 1)
                 h, w = frame.shape[:2]
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -48,20 +59,29 @@ def main(samples_per_point=30, delay=2.0):
                     lm = res.multi_face_landmarks[0].landmark
                     L = get_pts(lm, w, h, LEFT_EYE)
                     R = get_pts(lm, w, h, RIGHT_EYE)
-                    gaze = np.vstack((L,R)).mean(axis=0)
+                    gaze = np.vstack((L, R)).mean(axis=0)
 
                     data.append([gaze[0], gaze[1], tx, ty])
                     count += 1
 
-                cv2.circle(frame, (tx//4, ty//4), 15, (0,0,255), -1)  # hedefi küçültülmüş olarak göster
+                # --- Kırmızı hedef nokta (tam ekran oranlı) ---
+                draw_x = int(tx / sw * w)
+                draw_y = int(ty / sh * h)
+                cv2.circle(frame, (draw_x, draw_y), 15, (0, 0, 255), -1)
+
                 cv2.imshow("Calibration", frame)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
-                    cap.release(); cv2.destroyAllWindows(); return
+                    cap.release()
+                    cv2.destroyAllWindows()
+                    return
 
     cap.release()
     cv2.destroyAllWindows()
 
-    df = pd.DataFrame(data, columns=["eye_x","eye_y","screen_x","screen_y"])
+    df = pd.DataFrame(
+        data,
+        columns=["eye_x", "eye_y", "screen_x", "screen_y"]
+    )
     df.to_csv(save_path, index=False)
     print(f"✅ Kalibrasyon verisi kaydedildi: {save_path}")
 
